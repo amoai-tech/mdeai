@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChatProvider } from "@/components/chat/chat-provider";
-import { BROKER_ASK_MDE_EVENT } from "@/lib/rentals/broker-ask-mde";
+import { APP_RENTALS_ROUTE, BROKER_ASK_MDE_EVENT } from "@/lib/rentals/broker-ask-mde";
 import { useSession } from "@/hooks/use-session";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 import { RentalsConciergeCenter } from "./rentals-concierge-center";
@@ -37,7 +37,7 @@ export function RentalsAskMde({ children }: { children: ReactNode }) {
   // NOT activated until the broker opens it, or explicitly asks for
   // `?mode=concierge` (the Concierge nav link / a deep link). Unknown values
   // behave like Overview.
-  const conciergeRoute = pathname === "/app/rentals" && mode === "concierge";
+  const conciergeRoute = pathname === APP_RENTALS_ROUTE && mode === "concierge";
   const [activated, setActivated] = useState(conciergeRoute);
   const [expanded, setExpanded] = useState(conciergeRoute);
   const [focusRequest, setFocusRequest] = useState(0);

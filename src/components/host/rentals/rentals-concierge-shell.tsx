@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { MdeDashboardRenderProvider, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { BrokerChatProvider, RentalsAskMde } from "@/components/host/rentals/rentals-ask-mde";
+import { APP_RENTALS_ROUTE } from "@/lib/rentals/broker-ask-mde";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
 import { RentalsConversationHistory } from "@/components/host/rentals/rentals-conversation-history";
@@ -41,24 +42,25 @@ const RENTALS_HEADER_OPERATIONS = [{
  * Persistent frame for the /app/rentals broker route group only.
  * The legacy /host/rentals shell owns its own navigation and chat. Keep
  * that route separate until it is migrated; no speculative basePath API.
- * Page children own data; Ask MDE initializes only on explicit chat navigation or opening.
+ * Page children own data; Ask MDE auto-opens only on the explicit
+ * `?mode=concierge` route and otherwise waits for the toggle or header event.
  */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  // SAN-1685 — the dashboard and the embedded chat each render their own
-  // section heading. One visually hidden page heading keeps the document
-  // outline valid (the chat's own title is a secondary h2 when embedded).
-  const pageHeading = pathname === "/app/rentals/listings" ? "Rentals listings" : "Rentals overview";
+  // SAN-1685 — the Overview has no visible page-level heading of its own, so the
+  // frame supplies one visually hidden h1. Other pages in this route group
+  // (Listings, onboarding) already render their own h1, so the frame must not
+  // add a second one there.
   return (
     <MdeDashboardRenderProvider>
       <div data-testid="rentals-broker-frame" className="flex min-w-0 flex-col gap-4">
-        <h1 className="sr-only">{pageHeading}</h1>
+        {pathname === APP_RENTALS_ROUTE ? <h1 className="sr-only">Rentals overview</h1> : null}
         <MdeDashboardSurface
           surfaceId="rentals-workspace-header"
           operations={RENTALS_HEADER_OPERATIONS}
           fallback={<div><h2 className="font-serif text-xl font-semibold">Rentals workspace</h2><p className="text-sm text-muted-foreground">Manage your listings and viewing requests.</p></div>}
         />
-        <HostRentalsNav basePath="/app/rentals" />
+        <HostRentalsNav basePath={APP_RENTALS_ROUTE} />
         <RentalsAskMde>{children}</RentalsAskMde>
       </div>
     </MdeDashboardRenderProvider>
@@ -79,7 +81,7 @@ export function RentalsConciergeShell({
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
   // /app owns the single persistent bottom chat in its route layout.
   // The legacy host keeps its separate three-panel presentation.
-  if (basePath === "/app/rentals") {
+  if (basePath === APP_RENTALS_ROUTE) {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">
         <RentalsDynamicWorkspace mode="overview" dashboard={dashboard} loadError={loadError} />
