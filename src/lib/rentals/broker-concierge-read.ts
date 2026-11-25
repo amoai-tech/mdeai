@@ -59,10 +59,22 @@ export async function readBrokerWorkspace(
     // This focus deliberately omits listings; that is not pagination/truncation.
     listingsMayBeTruncated: focus === "viewings" ? false :
       inventory.total > listings.length,
-    kpis: view.kpis.map(({ label, value }) => ({ label, value })),
-    attentionIsPartial: view.attentionIsPartial ?? false,
+    kpis: view.kpis.map(({ label, value, provenance }) => ({ label, value, provenance })),
+    // SAN-1710 — the attention rows are exact aggregate counts, not a capped preview.
+    attentionIsPartial: false,
     listingsTotal: inventory.total,
     attention: view.attention.map(({ title, detail }) => ({ title, detail })),
+    today: {
+      total: view.todayTotal,
+      appointments: view.todaySchedule.slice(0, 20).map((request) => ({
+        showingId: request.showingId,
+        apartmentTitle: request.apartmentTitle,
+        scheduledAt: request.scheduledAt,
+        scheduledTime: request.scheduledTimeLabel,
+        status: request.status,
+      })),
+    },
+    upcomingPreviewTotal: view.upcomingPreviewTotal,
     viewingRequests: requests.map((request) => ({
       showingId: request.showingId,
       leadId: request.leadId,

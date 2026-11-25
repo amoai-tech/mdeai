@@ -21,7 +21,7 @@ export function RentalsConversationHistory({
         <p className="text-sm text-muted-foreground">No dashboard data loaded.</p>
       ) : dashboard.attention.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {dashboard.attentionIsPartial ? "No items in this preview. More records may need review." : "No actions need your attention right now."}
+          No actions need your attention right now.
         </p>
       ) : (
         <ul className="space-y-2" aria-label="Real broker attention">
@@ -34,9 +34,6 @@ export function RentalsConversationHistory({
           ))}
         </ul>
       )}
-      {dashboard?.attentionIsPartial && dashboard.attention.length > 0 ? (
-        <p className="text-xs text-muted-foreground">Showing an attention preview; more items may need review.</p>
-      ) : null}
       <p className="text-xs text-muted-foreground">
         The workspace shows your actual requests and available actions.
       </p>

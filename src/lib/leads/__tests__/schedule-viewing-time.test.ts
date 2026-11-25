@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LISTING_TIME_ZONE,
   isFutureInstant,
+  listingDayBounds,
   resolvePreferredAtInstant,
   nextMedellinTestViewingWallClock,
 } from "@/lib/leads/schedule-viewing-time";
@@ -119,6 +120,33 @@ describe("schedule-viewing-time (SAN-1203 timezone contract)", () => {
   });
 });
 
+
+describe("listingDayBounds (SAN-1710 Overview day boundary)", () => {
+  it("uses the Bogotá day, not the UTC or process day", () => {
+    // 15:00Z is 10:00 AM in Medellín: the local day started at 05:00Z.
+    expect(listingDayBounds(new Date("2026-11-24T15:00:00Z"))).toEqual({
+      start: "2026-11-24T05:00:00.000Z",
+      end: "2026-11-25T05:00:00.000Z",
+    });
+  });
+
+  it("keeps a late local evening on the same local day", () => {
+    // 21:00 in Medellín is already the next UTC day; it is still the 24th locally.
+    expect(listingDayBounds(new Date("2026-11-25T02:00:00Z"))).toEqual({
+      start: "2026-11-24T05:00:00.000Z",
+      end: "2026-11-25T05:00:00.000Z",
+    });
+  });
+
+  it("starts exactly at local midnight and is half-open", () => {
+    const midnight = new Date("2026-11-24T05:00:00.000Z");
+    const bounds = listingDayBounds(midnight);
+    expect(bounds.start).toBe("2026-11-24T05:00:00.000Z");
+    // An appointment at the next local midnight belongs to the next day.
+    expect(Date.parse(bounds.end)).toBeGreaterThan(Date.parse(bounds.start));
+    expect(Date.parse(bounds.end) - Date.parse(bounds.start)).toBe(86_400_000);
+  });
+});
 
 describe("nextMedellinTestViewingWallClock", () => {
   it("chooses tomorrow in Bogotá even when UTC already crossed midnight", () => {
