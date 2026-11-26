@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SignInRequired } from "@/components/auth/sign-in-required";
 import { createClient } from "@/lib/supabase/server";
 import { RentalTestModePanel } from "@/components/admin/rental-test-mode-panel";
@@ -46,7 +47,12 @@ export default async function AdminRentalsPage() {
           Admin access required.
         </p>
       ) : (
-        <RentalTestModePanel  />
+        <>
+          <Link href="/admin/rentals/inbox" className="mb-4 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline">
+            View rental inquiries
+          </Link>
+          <RentalTestModePanel />
+        </>
       )}
     </main>
   );

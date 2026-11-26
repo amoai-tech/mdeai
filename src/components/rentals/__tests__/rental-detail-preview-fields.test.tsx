@@ -73,6 +73,12 @@ const preview = (overrides: Partial<RentalDetail> = {}): RentalDetail => ({
 });
 
 describe("rental detail — external preview fields", () => {
+  it("keeps Contact Host accessible on a development-preview MDE-managed listing", async () => {
+    await render(preview({ isExternalSource: false, isNotIndependentlyVerified: false }));
+    expect(document.querySelector('[data-testid="rental-contact-host-cta"]')).not.toBeNull();
+  });
+
+
   it("says 'Bedrooms unknown' for an unknown count instead of a false Studio", async () => {
     await render(preview());
     const specs = document.querySelector('[data-testid="rental-detail-specs"]');
